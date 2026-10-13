@@ -3,26 +3,512 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Emberfall</title>
+<title>Emberfall — a match-3 puzzle game</title>
+<meta name="description" content="Emberfall is a match-3 puzzle game for Android. Swap glossy pieces, set off power-ups and wear down a boss every tenth level.">
+<meta name="theme-color" content="#0b1426">
+<meta property="og:title" content="Emberfall">
+<meta property="og:description" content="Match. Blast. Restore the Shattered Wilds.">
+<meta property="og:image" content="https://coderblac.github.io/img/logo.webp">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  body { margin: 0; font-family: system-ui, sans-serif; background: #141b2d; color: #f3ead7;
-         min-height: 100vh; display: flex; align-items: center; justify-content: center; text-align: center; }
-  main { padding: 32px 16px; max-width: 520px; }
-  h1 { color: #e0b04f; font-size: 40px; margin: 0 0 12px; }
-  p { line-height: 1.5; color: #d6cdb8; }
-  a { color: #e0b04f; }
-  nav { margin-top: 28px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  :root {
+    --night: #0b1426;
+    --navy: #14213d;
+    --navy-hi: #1d2e52;
+    --gold: #e0b04f;
+    --gold-hi: #f6d98b;
+    --gold-lo: #9a6a1c;
+    --ember: #ff7a3d;
+    --cream: #f3ead7;
+    --muted: #b9b2a3;
+    --cell: min(11.6vw, 62px);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--night);
+    color: var(--cream);
+    font: 400 17px/1.55 'Fredoka', system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+  img { display: block; max-width: 100%; }
+  a { color: var(--gold-hi); }
+  h1, h2, h3 { font-family: 'Cinzel', serif; font-weight: 900; margin: 0; line-height: 1.1; }
+  h2 { font-size: clamp(30px, 5vw, 48px); color: var(--gold-hi); letter-spacing: .01em; }
+  .wrap { width: min(1120px, 100% - 32px); margin: 0 auto; }
+
+  /* The chunky gold button, as in the game. */
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 26px 16px;
+    font: 600 18px/1 'Fredoka', sans-serif; color: #3a2405; text-decoration: none;
+    background: linear-gradient(#ffe7a3, var(--gold) 55%, #c98f2c);
+    border-radius: 999px;
+    box-shadow: 0 5px 0 var(--gold-lo), 0 10px 24px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.7);
+    transition: transform .08s, box-shadow .08s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--gold-lo), 0 4px 10px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.7); }
+  .btn svg { width: 22px; height: 22px; }
+
+  /* Hero ------------------------------------------------------------------ */
+  .hero {
+    position: relative; isolation: isolate;
+    min-height: min(100svh, 920px);
+    display: grid; align-items: center;
+    padding: 40px 0 72px;
+  }
+  .hero::before {
+    content: ''; position: absolute; inset: 0; z-index: -2;
+    background: url(img/dusk.webp) center 30% / cover no-repeat;
+  }
+  .hero::after {
+    content: ''; position: absolute; inset: 0; z-index: -1;
+    background:
+      radial-gradient(ellipse at 70% 45%, rgba(11,20,38,.15), rgba(11,20,38,.75) 70%),
+      linear-gradient(rgba(11,20,38,.35), rgba(11,20,38,.2) 40%, var(--night));
+  }
+  .hero-grid { display: grid; grid-template-columns: 1fr auto; gap: 48px; align-items: center; }
+  .logo { width: min(520px, 100%); margin-left: -12px; filter: drop-shadow(0 12px 30px rgba(0,0,0,.6)); }
+  .tagline { font-size: clamp(19px, 2.2vw, 23px); max-width: 30ch; margin: 8px 0 28px; color: var(--cream); text-shadow: 0 2px 10px rgba(0,0,0,.7); }
+  .note { margin-top: 14px; font-size: 14px; color: var(--muted); }
+
+  /* The playable board */
+  .board-card {
+    position: relative;
+    padding: 14px;
+    border-radius: 26px;
+    background: linear-gradient(160deg, #263a66, var(--navy) 45%, #0d1830);
+    box-shadow: 0 0 0 3px var(--gold), 0 0 0 7px #3b2a10, 0 30px 60px rgba(0,0,0,.6);
+  }
+  .hud { display: flex; justify-content: space-between; align-items: baseline; padding: 2px 6px 12px; }
+  .hud b { font-family: 'Cinzel', serif; font-size: 24px; color: var(--gold-hi); }
+  .hud span { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+  .board {
+    position: relative;
+    width: calc(var(--cell) * 7); height: calc(var(--cell) * 7);
+    border-radius: 16px; overflow: hidden;
+    background-color: #182a4c;
+    background-image: conic-gradient(rgba(255,255,255,.055) 25%, transparent 0 50%, rgba(255,255,255,.055) 0 75%, transparent 0);
+    background-size: calc(var(--cell) * 2) calc(var(--cell) * 2);
+    touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .piece {
+    position: absolute; left: 0; top: 0;
+    width: var(--cell); height: var(--cell); padding: calc(var(--cell) * .05);
+    transition: transform .22s cubic-bezier(.3,1.35,.6,1), opacity .2s, scale .2s;
+    cursor: grab;
+  }
+  .piece img { width: 100%; height: 100%; pointer-events: none; filter: drop-shadow(0 3px 2px rgba(0,0,0,.35)); }
+  .piece.picked img { animation: wobble .6s ease-in-out infinite; filter: drop-shadow(0 0 8px var(--gold-hi)); }
+  .piece.pop { scale: 1.35; opacity: 0; transition: scale .22s ease-out, opacity .22s ease-in; }
+  @keyframes wobble { 50% { transform: scale(1.1) rotate(-4deg); } }
+  .hint { text-align: center; font-size: 14px; color: var(--muted); margin-top: 12px; }
+  .hint i { font-style: normal; color: var(--gold-hi); }
+
+  /* Power-ups ----------------------------------------------------------- */
+  section { padding: 96px 0; }
+  .lede { max-width: 54ch; color: var(--muted); margin: 14px 0 44px; font-size: 18px; }
+  .recipes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  .recipe {
+    position: relative;
+    padding: 22px 18px 20px;
+    border-radius: 22px;
+    background: linear-gradient(var(--navy-hi), var(--navy));
+    border: 1px solid rgba(224,176,79,.25);
+  }
+  .recipe .make { display: flex; align-items: center; gap: 12px; height: 76px; }
+  .pattern { display: grid; gap: 3px; }
+  .pattern i { width: 13px; height: 13px; border-radius: 50%; background: rgba(255,255,255,.08); }
+  .pattern i.on { background: radial-gradient(circle at 35% 30%, #fff9, transparent 45%), var(--c); box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .arrow { color: var(--gold); font-size: 22px; }
+  .recipe img { width: 64px; height: 64px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+  .recipe h3 { font-size: 21px; color: var(--gold-hi); margin: 14px 0 4px; }
+  .recipe p { margin: 0; font-size: 15px; color: var(--muted); line-height: 1.45; }
+  .recipe small { display: block; margin-top: 10px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+
+  /* Bosses -------------------------------------------------------------- */
+  .bosses {
+    position: relative; isolation: isolate;
+    background: linear-gradient(var(--night), #120c1e 30%, #120c1e 70%, var(--night));
+  }
+  .bosses .head { display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+  .bosses .head > div:first-child { flex: 1; min-width: 0; }
+  .tenth { font-family: 'Cinzel', serif; font-weight: 900; font-size: clamp(80px, 14vw, 170px); line-height: .8; color: transparent; -webkit-text-stroke: 2px rgba(224,176,79,.35); }
+  .roster { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; }
+  .boss {
+    position: relative; overflow: hidden;
+    display: grid; grid-template-columns: 116px 1fr; gap: 16px; align-items: center;
+    padding: 18px;
+    border-radius: 22px;
+    background: radial-gradient(circle at 20% 50%, color-mix(in srgb, var(--b) 30%, transparent), transparent 60%), #1a1430;
+    border: 1px solid color-mix(in srgb, var(--b) 45%, transparent);
+  }
+  .boss img { width: 116px; height: 116px; object-fit: contain; filter: drop-shadow(0 8px 12px rgba(0,0,0,.55)); transition: transform .3s cubic-bezier(.3,1.5,.6,1); }
+  .boss:hover img { transform: scale(1.08) rotate(-3deg); }
+  .boss .lvl { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--b); font-weight: 600; }
+  .boss h3 { font-size: 20px; margin: 2px 0 6px; color: var(--cream); }
+  .boss p { margin: 0; font-size: 14.5px; line-height: 1.4; color: var(--muted); }
+  .boss .atk { display: inline-block; margin-top: 10px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; color: var(--night); background: var(--b); font-weight: 600; }
+
+  /* Closing band -------------------------------------------------------- */
+  .wilds {
+    position: relative; isolation: isolate; overflow: hidden;
+    padding: 120px 0; text-align: center;
+  }
+  .wilds::before { content: ''; position: absolute; inset: 0; z-index: -2; background: url(img/wilds.webp) center 40% / cover; }
+  .wilds::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(var(--night), rgba(11,20,38,.45) 35%, rgba(11,20,38,.55) 65%, var(--night)); }
+  .wilds h2 { color: #fff; text-shadow: 0 4px 24px rgba(0,0,0,.6); }
+  .wilds p { max-width: 46ch; margin: 16px auto 32px; font-size: 19px; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
+
+  footer { padding: 40px 0 56px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+  footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--gold-hi); }
+  .mark { display: flex; align-items: center; gap: 10px; font-family: 'Cinzel', serif; font-weight: 900; color: var(--gold-hi); font-size: 18px; }
+  .mark img { width: 28px; }
+
+  /* Narrow screens */
+  @media (max-width: 960px) {
+    .hero-grid { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 36px; }
+    .logo { margin: 0 auto; }
+    .tagline { margin-inline: auto; }
+    .recipes { grid-template-columns: repeat(2, 1fr); }
+    .recipes .recipe:last-child { grid-column: span 2; }
+    .roster { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 620px) {
+    .tenth { display: none; }
+    section { padding: 72px 0; }
+    .recipes { grid-template-columns: 1fr; }
+    .recipes .recipe:last-child { grid-column: auto; }
+    .roster { grid-template-columns: 1fr; }
+    .boss { grid-template-columns: 92px 1fr; }
+    .boss img { width: 92px; height: 92px; }
+    footer .wrap { flex-direction: column; text-align: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .piece, .boss img { transition: none; }
+    .piece.picked img { animation: none; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <h1>Emberfall</h1>
-  <p>A match-3 puzzle game for Android. Match pieces, fire power-ups and beat bosses on your way through the levels.</p>
-  <nav>
-    <a href="https://play.google.com/store/apps/details?id=com.bighitcoder.emberfall">Get it on Google Play</a>
-    <a href="https://coderblac.github.io/emberfall-privacy/">Privacy policy</a>
-    <a href="https://coderblac.github.io/emberfall-privacy/delete-account.html">Delete your account</a>
-  </nav>
-</main>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1><img class="logo" src="img/logo.webp" width="720" height="360" alt="Emberfall: Restore the Shattered Wilds"></h1>
+      <p class="tagline">Swap glossy little pieces, set off power-ups, and win back the Wilds one board at a time.</p>
+      <a class="btn" href="https://play.google.com/store/apps/details?id=com.bighitcoder.emberfall">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4.2 2.4c-.3.2-.5.6-.5 1.1v17c0 .5.2.9.5 1.1l9.4-9.6-9.4-9.6Zm10.6 8.4 2.6-2.6L6.3 1.9l8.5 8.9Zm0 2.4-8.5 8.9 11.1-6.3-2.6-2.6Zm6.2-2.1-2.4-1.4-2.8 2.8 2.8 2.8 2.4-1.4c.9-.5.9-2.3 0-2.8Z"/></svg>
+        Play on Google Play
+      </a>
+      <p class="note">Free on Android. In testing now, full launch soon.</p>
+    </div>
+
+    <div>
+      <div class="board-card">
+        <div class="hud"><span>Score</span><b id="score">0</b></div>
+        <div class="board" id="board" aria-label="A small playable Emberfall board"></div>
+      </div>
+      <p class="hint">Go on: <i>drag a piece</i> to make three in a row.</p>
+    </div>
+  </div>
+</header>
+
+<section id="power-ups">
+  <div class="wrap">
+    <h2>Match four. Then it gets loud.</h2>
+    <p class="lede">Bigger matches fuse into power-ups. Tap one or swipe it into a neighbour to set it off, or swap two together for something much bigger.</p>
+    <div class="recipes">
+      <div class="recipe">
+        <div class="make">
+          <div class="pattern" style="--c:#e8344a;grid-template-columns:repeat(4,13px)"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+          <span class="arrow">→</span><img src="img/fire.webp" alt="" width="64" height="64">
+        </div>
+        <h3>Fire</h3><p>Burns through its whole row.</p><small>4 in a row</small>
+      </div>
+      <div class="recipe">
+        <div class="make">
+          <div class="pattern" style="--c:#2f9be8;grid-template-columns:13px"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+          <span class="arrow">→</span><img src="img/lightning.webp" alt="" width="64" height="64">
+        </div>
+        <h3>Lightning</h3><p>Strikes straight down its column.</p><small>4 in a column</small>
+      </div>
+      <div class="recipe">
+        <div class="make">
+          <div class="pattern" style="--c:#f2c523;grid-template-columns:repeat(3,13px)"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i class="on"></i><i></i><i></i><i class="on"></i></div>
+          <span class="arrow">→</span><img src="img/bomb.webp" alt="" width="64" height="64">
+        </div>
+        <h3>Bomb</h3><p>Clears everything around it.</p><small>L or T shape</small>
+      </div>
+      <div class="recipe">
+        <div class="make">
+          <div class="pattern" style="--c:#9b3fe0;grid-template-columns:repeat(5,13px)"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+          <span class="arrow">→</span><img src="img/vortex.webp" alt="" width="64" height="64">
+        </div>
+        <h3>Vortex</h3><p>Swallows every piece of one colour.</p><small>5 in a line</small>
+      </div>
+      <div class="recipe">
+        <div class="make">
+          <div class="pattern" style="--c:#3fbf4a;grid-template-columns:repeat(2,13px)"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+          <span class="arrow">→</span><img src="img/firefly.webp" alt="" width="64" height="64">
+        </div>
+        <h3>Firefly</h3><p>Flies off to whatever your goals need most.</p><small>Square of 4</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="bosses" id="bosses">
+  <div class="wrap">
+    <div class="head">
+      <div>
+        <h2>Every tenth level, something wakes up.</h2>
+        <p class="lede">Each piece you clear wears the boss down. Every few moves it hits back.</p>
+      </div>
+      <div class="tenth" aria-hidden="true">10</div>
+    </div>
+    <div class="roster">
+      <article class="boss" style="--b:#8bc34a">
+        <img src="img/mossback.webp" alt="" width="320" height="320" loading="lazy">
+        <div><span class="lvl">Level 10</span><h3>Mossback</h3><p>A grumpy old shell-toad that naps across the path.</p><span class="atk">Shells up</span></div>
+      </article>
+      <article class="boss" style="--b:#81d4fa">
+        <img src="img/shiverpaw.webp" alt="" width="320" height="320" loading="lazy">
+        <div><span class="lvl">Level 20</span><h3>Shiverpaw</h3><p>A snow-puff that freezes everything it hugs.</p><span class="atk">Freezes pieces</span></div>
+      </article>
+      <article class="boss" style="--b:#ff7043">
+        <img src="img/cinder_wyrm.webp" alt="" width="320" height="320" loading="lazy">
+        <div><span class="lvl">Level 30</span><h3>The Cinder Wyrm</h3><p>It sleeps beneath the Caldera and wakes in fire.</p><span class="atk">Drops Ember Stones</span></div>
+      </article>
+      <article class="boss" style="--b:#c9b8a4">
+        <img src="img/crackjaw.webp" alt="" width="320" height="320" loading="lazy">
+        <div><span class="lvl">Level 40</span><h3>Crackjaw</h3><p>A rocky chomper that spits ice and stone.</p><span class="atk">Spits ice and stone</span></div>
+      </article>
+      <article class="boss" style="--b:#9ccc65">
+        <img src="img/thornmaw.webp" alt="" width="320" height="320" loading="lazy">
+        <div><span class="lvl">Level 50</span><h3>Thornmaw</h3><p>A beast of living bramble that chokes the Hollow.</p><span class="atk">Wraps pieces in brambles</span></div>
+      </article>
+      <article class="boss" style="--b:#b39ddb">
+        <img src="img/duskwraith.webp" alt="" width="320" height="320" loading="lazy">
+        <div><span class="lvl">Level 60</span><h3>The Duskwraith</h3><p>Mother of the Shadow Mist, hungry for light.</p><span class="atk">Spreads Shadow Mist</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="wilds">
+  <div class="wrap">
+    <h2>The Wilds are waiting.</h2>
+    <p>Play with friends, join a team to take on raid bosses together, and climb the board for the throne.</p>
+    <a class="btn" href="https://play.google.com/store/apps/details?id=com.bighitcoder.emberfall">Play on Google Play</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="mark"><img src="img/flame.webp" alt="" width="28" height="28">Emberfall</div>
+    <nav>
+      <a href="https://play.google.com/store/apps/details?id=com.bighitcoder.emberfall">Google Play</a>
+      <a href="https://coderblac.github.io/emberfall-privacy/">Privacy policy</a>
+      <a href="https://coderblac.github.io/emberfall-privacy/delete-account.html">Delete your account</a>
+    </nav>
+    <span>© 2026 Emberfall</span>
+  </div>
+</footer>
+
+<script>
+// A tiny playable board with the game's own pieces: swap two neighbours to
+// make a line of three or more; matches pop, pieces fall, new ones drop in.
+(() => {
+  const N = 7;
+  const kinds = ['flame', 'drop', 'clover', 'star', 'moon'];
+  const boardEl = document.getElementById('board');
+  const scoreEl = document.getElementById('score');
+  let grid = [];          // grid[y][x] = { kind, el }
+  let busy = false;
+  let score = 0;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const cell = () => boardEl.clientWidth / N;
+
+  function place(p, x, y) {
+    p.el.style.transform = `translate(${x * cell()}px, ${y * cell()}px)`;
+  }
+
+  function make(kind, x, y, fromY = y) {
+    const el = document.createElement('div');
+    el.className = 'piece';
+    el.innerHTML = `<img src="img/${kind}.webp" alt="">`;
+    const p = { kind, el };
+    el.style.transition = 'none';
+    place(p, x, fromY);
+    boardEl.appendChild(el);
+    el.getBoundingClientRect();
+    el.style.transition = '';
+    return p;
+  }
+
+  function startKind(x, y) {
+    // Avoid starting with matches already on the board.
+    const bad = new Set();
+    if (x >= 2 && grid[y][x - 1].kind === grid[y][x - 2].kind) bad.add(grid[y][x - 1].kind);
+    if (y >= 2 && grid[y - 1][x].kind === grid[y - 2][x].kind) bad.add(grid[y - 1][x].kind);
+    const ok = kinds.filter(k => !bad.has(k));
+    return ok[Math.floor(Math.random() * ok.length)];
+  }
+
+  function findMatches() {
+    const hit = new Set();
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const k = grid[y][x]?.kind;
+        if (!k) continue;
+        let r = x; while (r + 1 < N && grid[y][r + 1]?.kind === k) r++;
+        if (r - x >= 2) for (let i = x; i <= r; i++) hit.add(y * N + i);
+        let d = y; while (d + 1 < N && grid[d + 1][x]?.kind === k) d++;
+        if (d - y >= 2) for (let i = y; i <= d; i++) hit.add(i * N + x);
+      }
+    }
+    return hit;
+  }
+
+  function hasMove() {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= N || ny >= N) continue;
+        [grid[y][x], grid[ny][nx]] = [grid[ny][nx], grid[y][x]];
+        const ok = findMatches().size > 0;
+        [grid[y][x], grid[ny][nx]] = [grid[ny][nx], grid[y][x]];
+        if (ok) return true;
+      }
+    }
+    return false;
+  }
+
+  function build() {
+    boardEl.innerHTML = '';
+    grid = Array.from({ length: N }, () => Array(N).fill(null));
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      grid[y][x] = { kind: startKind(x, y) };
+    }
+    if (!hasMove()) return build();
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      grid[y][x] = make(grid[y][x].kind, x, y, y - N - 1);
+      grid[y][x].el.style.transitionDelay = `${(N - y) * 30 + x * 12}ms`;
+    }
+    requestAnimationFrame(() => {
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) place(grid[y][x], x, y);
+      setTimeout(() => grid.flat().forEach(p => p.el.style.transitionDelay = ''), 900);
+    });
+  }
+
+  async function resolve() {
+    let chain = 0;
+    for (;;) {
+      const hit = findMatches();
+      if (!hit.size) break;
+      chain++;
+      score += hit.size * 20 * chain;
+      scoreEl.textContent = score.toLocaleString();
+      for (const i of hit) {
+        const x = i % N, y = Math.floor(i / N);
+        grid[y][x].el.classList.add('pop');
+        const el = grid[y][x].el;
+        setTimeout(() => el.remove(), 240);
+        grid[y][x] = null;
+      }
+      await wait(200);
+      // Fall, then refill from above.
+      for (let x = 0; x < N; x++) {
+        let to = N - 1;
+        for (let y = N - 1; y >= 0; y--) {
+          if (!grid[y][x]) continue;
+          const p = grid[y][x];
+          grid[y][x] = null;
+          grid[to][x] = p;
+          place(p, x, to);
+          to--;
+        }
+        for (let y = to, k = 1; y >= 0; y--, k++) {
+          const p = make(kinds[Math.floor(Math.random() * kinds.length)], x, y, -k);
+          grid[y][x] = p;
+          requestAnimationFrame(() => place(p, x, y));
+        }
+      }
+      await wait(300);
+    }
+    if (!hasMove()) { await wait(400); build(); }
+  }
+
+  async function swap(a, b) {
+    if (busy) return;
+    busy = true;
+    const [ax, ay] = a, [bx, by] = b;
+    const pa = grid[ay][ax], pb = grid[by][bx];
+    grid[ay][ax] = pb; grid[by][bx] = pa;
+    place(pa, bx, by); place(pb, ax, ay);
+    await wait(220);
+    if (findMatches().size) {
+      await resolve();
+    } else {
+      grid[ay][ax] = pa; grid[by][bx] = pb;
+      place(pa, ax, ay); place(pb, bx, by);
+      await wait(220);
+    }
+    busy = false;
+  }
+
+  // Drag (or swipe) a piece toward a neighbour; or tap one, then another.
+  let start = null, picked = null;
+  const at = e => {
+    const r = boardEl.getBoundingClientRect();
+    return [Math.floor((e.clientX - r.left) / cell()), Math.floor((e.clientY - r.top) / cell())];
+  };
+  const inside = ([x, y]) => x >= 0 && y >= 0 && x < N && y < N;
+  const unpick = () => { if (picked) grid[picked[1]][picked[0]]?.el.classList.remove('picked'); picked = null; };
+
+  boardEl.addEventListener('pointerdown', e => {
+    const c = at(e);
+    if (!inside(c) || busy) return;
+    start = { c, x: e.clientX, y: e.clientY };
+    boardEl.setPointerCapture(e.pointerId);
+  });
+  boardEl.addEventListener('pointermove', e => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < cell() * 0.35) return;
+    const [x, y] = start.c;
+    const to = Math.abs(dx) > Math.abs(dy) ? [x + Math.sign(dx), y] : [x, y + Math.sign(dy)];
+    start = null;
+    unpick();
+    if (inside(to)) swap([x, y], to);
+  });
+  boardEl.addEventListener('pointerup', () => {
+    if (!start) return;
+    const c = start.c;
+    start = null;
+    if (picked && Math.abs(picked[0] - c[0]) + Math.abs(picked[1] - c[1]) === 1) {
+      const p = picked; unpick(); swap(p, c);
+    } else if (picked && picked[0] === c[0] && picked[1] === c[1]) {
+      unpick();
+    } else {
+      unpick();
+      picked = c;
+      grid[c[1]][c[0]].el.classList.add('picked');
+    }
+  });
+
+  addEventListener('resize', () => grid.forEach((row, y) => row.forEach((p, x) => p && place(p, x, y))));
+  build();
+})();
+</script>
 </body>
 </html>
